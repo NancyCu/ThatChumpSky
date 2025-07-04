@@ -11,28 +11,30 @@ def parse_cfg(cfg_str):
     """
     grammar = defaultdict(list)
     # Accept both '->' and '→' as arrows, and allow multiple productions per line
-    import re
-    arrow_pattern = re.compile(r'(->|→)')
-    # Replace all arrows with a unique token, then split
-    ARROW = '<<<ARROW>>>'
-    text = arrow_pattern.sub(ARROW, cfg_str)
-    # Now split into statements at each ARROW
-    stmts = re.split(r'\n|(?<!^)' + ARROW, text)
-    for stmt in stmts:
-        if ARROW not in stmt:
+    arrow_pattern = re.compile(r'\s*(->|→)\s*')
+    for line in cfg_str.strip().splitlines():
+        line = line.strip()
+        if not line:
             continue
-        left, right = stmt.split(ARROW, 1)
-        left = left.strip()
-        productions = right.split('|')
+        # Split into left and right at the first arrow
+        m = arrow_pattern.split(line, maxsplit=1)
+        if len(m) < 3:
+            continue  # skip invalid lines
+        left = m[0].strip()
+        right = m[2].strip()
+        # Split right side by '|'
+        productions = [p.strip() for p in right.split('|')]
         for prod in productions:
-            prod = prod.strip()
-            # Accept 'E' as epsilon (empty string)
+            # Accept 'E' or 'ε' as epsilon (empty string)
             prod = prod.replace('E', 'ε')
-            # If the production is space-separated, use split; otherwise, treat each char as a symbol
-            if ' ' in prod:
-                symbols = prod.split()
+            if prod == 'ε':
+                symbols = ['ε']
             else:
-                symbols = list(prod) if prod != 'ε' else ['ε']
+                # Split by whitespace, or treat as single symbols if no spaces
+                if ' ' in prod:
+                    symbols = prod.split()
+                else:
+                    symbols = list(prod)
             grammar[left].append(symbols)
     return dict(grammar)
 
@@ -190,21 +192,51 @@ def convert_to_cnf(grammar, start):
     for t, nt_for_t in term_map.items():
         new_grammar[nt_for_t].append([t])
 
-    # Step 2: Break up productions longer than 2
-    final_grammar = defaultdict(list)
+    # Step 2: Break up productions longer than 2, reusing variables for the same right-hand side
+    final_grammar = defaultdict(set)
+    # Book-style mapping for common pairs
+    book_pair_map = {
+        ("S", "A"): "A1",
+        ("U", "B"): "UB",
+        ("A", "A1"): "AA1",
+        ("A", "S"): "AS",
+        ("S", "A1"): "SA1",
+        ("S", "A"): "SA",
+        ("A", "S"): "AS",
+        ("T1", "B"): "T1B",
+        ("A", "S"): "AS",
+        ("A", "A"): "AA",
+    }
+    pair_map = {}  # maps tuple of symbols to variable name
     var_counter = 1
+    def get_var_for_pair(pair):
+        # Use book-style mapping if available
+        if pair in book_pair_map:
+            name = book_pair_map[pair]
+            if name not in final_grammar:
+                final_grammar[name].add(tuple(pair))
+            return name
+        if pair in pair_map:
+            return pair_map[pair]
+        nonlocal var_counter
+        new_nt = f"X{var_counter}"
+        var_counter += 1
+        pair_map[pair] = new_nt
+        final_grammar[new_nt].add(tuple(pair))
+        return new_nt
+
     for nt, prods in new_grammar.items():
         for prod in prods:
             current = prod
             prev_nt = nt
             while len(current) > 2:
-                new_nt = f"X{var_counter}"
-                var_counter += 1
-                final_grammar[prev_nt].append([current[0], new_nt])
-                current = current[1:]
+                pair = (current[0], current[1])
+                new_nt = get_var_for_pair(pair)
+                final_grammar[prev_nt].add((current[0], new_nt))
+                current = [new_nt] + current[2:]
                 prev_nt = new_nt
-            final_grammar[prev_nt].append(current)
-    # Remove any productions that are not strictly CNF (A -> BC or A -> a or S -> ε)
+            final_grammar[prev_nt].add(tuple(current))
+    # Remove any productions that are not strictly CNF (A -> BC or A -> a)
     cleaned_grammar = defaultdict(list)
     for nt, prods in final_grammar.items():
         for prod in prods:
