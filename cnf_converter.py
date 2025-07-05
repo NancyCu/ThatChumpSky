@@ -209,11 +209,12 @@ def convert_to_cnf(grammar, start):
     }
     pair_map = {}  # maps tuple of symbols to variable name
     var_counter = 1
+
     def get_var_for_pair(pair):
         # Use book-style mapping if available
         if pair in book_pair_map:
             name = book_pair_map[pair]
-            if name not in final_grammar:
+            if tuple(pair) not in final_grammar[name]:
                 final_grammar[name].add(tuple(pair))
             return name
         if pair in pair_map:
@@ -227,15 +228,11 @@ def convert_to_cnf(grammar, start):
 
     for nt, prods in new_grammar.items():
         for prod in prods:
-            current = prod
-            prev_nt = nt
-            while len(current) > 2:
-                pair = (current[0], current[1])
+            while len(prod) > 2:
+                pair = (prod[-2], prod[-1])
                 new_nt = get_var_for_pair(pair)
-                final_grammar[prev_nt].add((current[0], new_nt))
-                current = [new_nt] + current[2:]
-                prev_nt = new_nt
-            final_grammar[prev_nt].add(tuple(current))
+                prod = prod[:-2] + [new_nt]
+            final_grammar[nt].add(tuple(prod))
     # Remove any productions that are not strictly CNF (A -> BC or A -> a)
     cleaned_grammar = defaultdict(list)
     for nt, prods in final_grammar.items():
