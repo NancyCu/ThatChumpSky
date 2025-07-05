@@ -80,15 +80,15 @@ B  → b
 
 ## 5  Final Chomsky Normal Form
 ```cfg
-AS → AS A | A S
-S0 → A AS | T1 B
-S  → A AS | T1 B
-X1 → X1 S | B I
-A  → B X1
+S0 → A X1 | T_a B | a
+A  → B X3 | T_I S
 B  → b
-T1 → a
+S  → A X2 | T_a B | a
+T_I → I
+T_a → a
+X1 → S A
+X2 → S A
+X3 → T_I S
 ```
-
-NEED TO CORECT (Empty String still there)
 
 
