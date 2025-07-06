@@ -218,44 +218,48 @@ def remove_useless_symbols(grammar, start):
     return grammar
 
 def convert_to_cnf(grammar, start):
+    """Transform ``grammar`` into Chomsky Normal Form."""
+
+    # ------------------------------------------------------------------
     # Step 1: Replace terminals in productions of length > 1 with new
-    # nonterminals.  We treat any symbol that does not appear on the left-hand
-    # side of ``grammar`` as a terminal.  For each distinct terminal encountered
-    # inside a longer production we create a new nonterminal ``T1``, ``T2`` ...
-    # that produces that terminal.  This ensures compound rules contain only
-    # variables.
+    # nonterminals.  Terminals are any symbols that never appear on the
+    # left-hand side of a rule.
+    # ------------------------------------------------------------------
     new_grammar = defaultdict(list)
     term_map = {}
-    term_counter = 1
-    # Use deterministic names for common terminals so the output matches
-    # the walkthrough in the README.  In particular ``a`` becomes ``U``.
-    terminal_names = {'a': 'U'}
+    term_id = 1
+
+    def get_term_var(t):
+        nonlocal term_id
+        if t not in term_map:
+            # Use deterministic numbering so tests can rely on names
+            term_map[t] = f"T{term_id}"
+            term_id += 1
+        return term_map[t]
+
     for nt, prods in grammar.items():
         for prod in prods:
             if len(prod) > 1:
                 replaced = []
                 for sym in prod:
-                    if sym in grammar or sym == 'ε':
+                    if sym in grammar or sym == "ε":
                         replaced.append(sym)
                     else:
-                        if sym not in term_map:
-                            new_nt = terminal_names.get(sym, f"T{term_counter}")
-                            term_counter += 1
-                            term_map[sym] = new_nt
-                        replaced.append(term_map[sym])
+                        replaced.append(get_term_var(sym))
                 new_grammar[nt].append(replaced)
             else:
                 new_grammar[nt].append(prod)
 
-    for t, nt_for_t in term_map.items():
-        new_grammar[nt_for_t].append([t])
+    for t, var in term_map.items():
+        new_grammar[var].append([t])
 
-    # Step 2: Break up productions longer than 2 symbols by repeatedly
-    # introducing new variables for the left-most pair.
+    # ------------------------------------------------------------------
+    # Step 2: Break up productions longer than 2 symbols by introducing new
+    # variables.  Productions are decomposed from the left so that A -> B C D
+    # becomes A -> B X1, X1 -> C D.
+    # ------------------------------------------------------------------
     final_grammar = defaultdict(list)
-    # Pre-map SA -> A1 so that rules like ``ASA`` expand to ``A A1``
-    pair_map = {('S', 'A'): 'A1'}
-    var_counter = 1
+    chain_id = 1
     for nt, prods in new_grammar.items():
         for prod in prods:
             if len(prod) <= 2:
@@ -263,33 +267,48 @@ def convert_to_cnf(grammar, start):
                 continue
 
             current = prod
-            # Break from the right so the last two symbols form the first pair
+            prev = nt
             while len(current) > 2:
-                pair = tuple(current[-2:])
-                if pair not in pair_map:
-                    new_nt = f"X{var_counter}"
-                    var_counter += 1
-                    pair_map[pair] = new_nt
-                else:
-                    new_nt = pair_map[pair]
-                if list(pair) not in final_grammar[new_nt]:
-                    final_grammar[new_nt].append(list(pair))
-                current = current[:-2] + [new_nt]
-            final_grammar[nt].append(current)
+                first, second = current[0], current[1]
+                new_var = f"X{chain_id}"
+                chain_id += 1
+                final_grammar[prev].append([first, new_var])
+                prev = new_var
+                current = current[1:]
+            final_grammar[prev].append(current)
 
-    # Step 3: Remove any productions that violate CNF.  Only ``A -> a`` or
-    # ``A -> B C`` are kept, with ``ε`` allowed only for the start symbol.
+    # ------------------------------------------------------------------
+    # Step 3: Validate and keep only productions allowed by CNF.  The only
+    # permitted forms are::
+    #   A -> a
+    #   A -> B C
+    # with ``ε`` allowed only for the start symbol.
+    # ------------------------------------------------------------------
     cleaned = defaultdict(list)
+    nonterminals = set(final_grammar.keys())
+    for prods in final_grammar.values():
+        for prod in prods:
+            for sym in prod:
+                if sym in final_grammar:
+                    nonterminals.add(sym)
+
     for nt, prods in final_grammar.items():
         for prod in prods:
-            if len(prod) == 1:
-                if prod == ['ε']:
-                    if nt == start:
+            if prod == ["ε"]:
+                if nt == start:
+                    if prod not in cleaned[nt]:
                         cleaned[nt].append(prod)
-                else:
-                    cleaned[nt].append(prod)
+                continue
+
+            if len(prod) == 1:
+                if prod[0] not in nonterminals:
+                    if prod not in cleaned[nt]:
+                        cleaned[nt].append(prod)
             elif len(prod) == 2:
-                cleaned[nt].append(prod)
+                if all(sym in nonterminals for sym in prod):
+                    if prod not in cleaned[nt]:
+                        cleaned[nt].append(prod)
+
     return dict(cleaned)
 
 def format_grammar(grammar):
@@ -298,4 +317,22 @@ def format_grammar(grammar):
         right = [" ".join(prod) for prod in prods]
         lines.append(f"{nt} -> {' | '.join(right)}")
     return "\n".join(lines)
+
+
+def is_cnf(grammar, start):
+    """Return ``True`` if ``grammar`` is in Chomsky Normal Form."""
+    for nt, prods in grammar.items():
+        for prod in prods:
+            if prod == ["ε"]:
+                if nt != start:
+                    return False
+            elif len(prod) == 1:
+                if prod[0] in grammar:
+                    return False
+            elif len(prod) == 2:
+                if not all(sym in grammar for sym in prod):
+                    return False
+            else:
+                return False
+    return True
 
