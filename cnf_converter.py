@@ -219,87 +219,73 @@ def remove_useless_symbols(grammar, start):
     return grammar
 
 def convert_to_cnf(grammar, start):
-    # Step 1: Replace terminals in productions of length > 1 with new nonterminals
+    # Step 1: Replace terminals in productions of length > 1 with new
+    # nonterminals.  We treat any symbol that does not appear on the left-hand
+    # side of ``grammar`` as a terminal.  For each distinct terminal encountered
+    # inside a longer production we create a new nonterminal ``T1``, ``T2`` ...
+    # that produces that terminal.  This ensures compound rules contain only
+    # variables.
     new_grammar = defaultdict(list)
     term_map = {}
     term_counter = 1
     for nt, prods in grammar.items():
         for prod in prods:
             if len(prod) > 1:
-                new_prod = []
-                for symbol in prod:
-                    # A terminal is a single lowercase letter or nonterminal is uppercase
-                    if len(symbol) == 1 and symbol.islower():
-                        if symbol not in term_map:
+                replaced = []
+                for sym in prod:
+                    if sym in grammar or sym == 'ε':
+                        replaced.append(sym)
+                    else:
+                        if sym not in term_map:
                             new_nt = f"T{term_counter}"
                             term_counter += 1
-                            term_map[symbol] = new_nt
-                        new_prod.append(term_map[symbol])
-                    else:
-                        new_prod.append(symbol)
-                new_grammar[nt].append(new_prod)
+                            term_map[sym] = new_nt
+                        replaced.append(term_map[sym])
+                new_grammar[nt].append(replaced)
             else:
                 new_grammar[nt].append(prod)
-    # Add productions for the new terminal nonterminals
+
     for t, nt_for_t in term_map.items():
         new_grammar[nt_for_t].append([t])
 
-    # Step 2: Break up productions longer than 2, reusing variables for the same right-hand side
-    final_grammar = defaultdict(set)
-    # Book-style mapping for common pairs
-    book_pair_map = {
-        ("S", "A"): "A1",
-        ("U", "B"): "UB",
-        ("A", "A1"): "AA1",
-        ("A", "S"): "AS",
-        ("S", "A1"): "SA1",
-        ("S", "A"): "SA",
-        ("A", "S"): "AS",
-        ("T1", "B"): "T1B",
-        ("A", "S"): "AS",
-        ("A", "A"): "AA",
-    }
-    pair_map = {}  # maps tuple of symbols to variable name
+    # Step 2: Break up productions longer than 2 symbols by repeatedly
+    # introducing new variables for the left-most pair.
+    final_grammar = defaultdict(list)
+    pair_map = {}
     var_counter = 1
-
-    def get_var_for_pair(pair):
-        # Use book-style mapping if available
-        if pair in book_pair_map:
-            name = book_pair_map[pair]
-            if tuple(pair) not in final_grammar[name]:
-                final_grammar[name].add(tuple(pair))
-            return name
-        if pair in pair_map:
-            return pair_map[pair]
-        nonlocal var_counter
-        new_nt = f"X{var_counter}"
-        var_counter += 1
-        pair_map[pair] = new_nt
-        final_grammar[new_nt].add(tuple(pair))
-        return new_nt
-
     for nt, prods in new_grammar.items():
         for prod in prods:
-            while len(prod) > 2:
-                pair = (prod[-2], prod[-1])
-                new_nt = get_var_for_pair(pair)
-                prod = prod[:-2] + [new_nt]
-            final_grammar[nt].add(tuple(prod))
-    # Remove any productions that are not strictly CNF (A -> BC or A -> a)
-    cleaned_grammar = defaultdict(list)
+            if len(prod) <= 2:
+                final_grammar[nt].append(prod)
+                continue
+
+            current = prod
+            while len(current) > 2:
+                pair = tuple(current[:2])
+                if pair not in pair_map:
+                    new_nt = f"X{var_counter}"
+                    var_counter += 1
+                    pair_map[pair] = new_nt
+                    final_grammar[new_nt].append(list(pair))
+                else:
+                    new_nt = pair_map[pair]
+                current = [new_nt] + current[2:]
+            final_grammar[nt].append(current)
+
+    # Step 3: Remove any productions that violate CNF.  Only ``A -> a`` or
+    # ``A -> B C`` are kept, with ``ε`` allowed only for the start symbol.
+    cleaned = defaultdict(list)
     for nt, prods in final_grammar.items():
         for prod in prods:
             if len(prod) == 1:
-                # Only allow ε for the start symbol
                 if prod == ['ε']:
                     if nt == start:
-                        cleaned_grammar[nt].append(prod)
-                    # else: skip ε for non-start symbols
+                        cleaned[nt].append(prod)
                 else:
-                    cleaned_grammar[nt].append(prod)
-            elif len(prod) == 2 and all(s.isupper() for s in prod):
-                cleaned_grammar[nt].append(prod)
-    return dict(cleaned_grammar)
+                    cleaned[nt].append(prod)
+            elif len(prod) == 2:
+                cleaned[nt].append(prod)
+    return dict(cleaned)
 
 def format_grammar(grammar):
     lines = []
