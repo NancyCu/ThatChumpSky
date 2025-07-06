@@ -1,5 +1,5 @@
 import unittest
-from cnf_converter import parse_cfg, cfg_to_cnf, generate_words
+from cnf_converter import parse_cfg, cfg_to_cnf, generate_words, is_cnf
 
 class TestCNFConverter(unittest.TestCase):
     def test_parse_cfg_basic(self):
@@ -19,7 +19,7 @@ class TestCNFConverter(unittest.TestCase):
         }
         self.assertEqual(parse_cfg(cfg_str), expected)
 
-    def test_cfg_to_cnf_steps_and_result(self):
+    def test_cfg_to_cnf_produces_valid_cnf(self):
         cfg_str = "S -> AB | a\nA -> aA | ε\nB -> b"
         grammar = parse_cfg(cfg_str)
         cnf_str, steps = cfg_to_cnf(grammar)
@@ -33,14 +33,24 @@ class TestCNFConverter(unittest.TestCase):
         ]
         self.assertEqual([t for t, _ in steps], expected_titles)
 
-        expected_cnf = parse_cfg(
-            "S -> A B | a | b\nA -> U A | a\nB -> b\nU -> a"
+        cnf = parse_cfg(cnf_str)
+        self.assertTrue(is_cnf(cnf, 'S'))
+        self.assertEqual(
+            generate_words(grammar, 'S', max_length=3),
+            generate_words(cnf, 'S', max_length=3)
         )
 
-        def as_sets(g):
-            return {nt: {tuple(p) for p in prods} for nt, prods in g.items()}
+    def test_epsilon_only_from_start(self):
+        cfg_str = "S -> A | ε\nA -> S B | a\nB -> b"
+        grammar = parse_cfg(cfg_str)
+        cnf_str, _ = cfg_to_cnf(grammar)
+        cnf = parse_cfg(cnf_str)
 
-        self.assertEqual(as_sets(parse_cfg(cnf_str)), as_sets(expected_cnf))
+        self.assertTrue(is_cnf(cnf, 'S0'))
+        for nt, prods in cnf.items():
+            for p in prods:
+                if p == ['ε']:
+                    self.assertEqual(nt, 'S0')
 
     def test_generate_words_simple(self):
         grammar = parse_cfg("S -> aS | b")
