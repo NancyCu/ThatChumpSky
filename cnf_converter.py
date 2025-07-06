@@ -310,3 +310,50 @@ def format_grammar(grammar):
         right = [" ".join(prod) for prod in prods]
         lines.append(f"{nt} -> {' | '.join(right)}")
     return "\n".join(lines)
+
+def generate_words(grammar, start=None, max_length=5):
+    """Generate all words from the CFG up to ``max_length`` terminals.
+
+    Parameters
+    ----------
+    grammar : dict
+        Grammar returned by :func:`parse_cfg`.
+    start : str, optional
+        Start symbol. Defaults to the first key in ``grammar``.
+    max_length : int
+        Maximum length (in terminals) of generated words.
+
+    Returns
+    -------
+    set[str]
+        Set of terminal words with length ``<= max_length``.
+    """
+    if start is None:
+        start = next(iter(grammar))
+
+    words = set()
+    queue = [[start]]
+
+    while queue:
+        seq = queue.pop(0)
+
+        # Current length ignoring nonterminals and epsilons
+        current_word = "".join(s for s in seq if s not in grammar and s != "ε")
+        if len(current_word) > max_length:
+            continue
+
+        # If sequence contains only terminals
+        if all(s not in grammar for s in seq):
+            words.add(current_word)
+            continue
+
+        # Expand the first nonterminal in the sequence
+        for i, sym in enumerate(seq):
+            if sym in grammar:
+                for prod in grammar[sym]:
+                    # Skip epsilon in the middle of sequences
+                    new_seq = seq[:i] + [t for t in prod if t != "ε"] + seq[i+1:]
+                    queue.append(new_seq)
+                break
+
+    return {w for w in words if len(w) <= max_length}
