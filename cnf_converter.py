@@ -74,6 +74,58 @@ def cfg_to_cnf(grammar):
 
     return format_grammar(grammar), steps
 
+def generate_words(grammar, start=None, max_length=4, max_words=20):
+    """Generate words from the grammar up to a given length.
+
+    Parameters
+    ----------
+    grammar : dict
+        The CFG as produced by ``parse_cfg``.
+    start : str, optional
+        Start symbol. If ``None`` the first key of ``grammar`` is used.
+    max_length : int, default 4
+        Maximum length of words (in terminal symbols).
+    max_words : int, default 20
+        Maximum number of words to generate.
+
+    Returns
+    -------
+    list of str
+        Sorted list of generated words.
+    """
+    if start is None:
+        start = next(iter(grammar))
+
+    words = set()
+    from collections import deque
+
+    queue = deque()
+    queue.append([start])
+
+    while queue and len(words) < max_words:
+        current = queue.popleft()
+
+        # If current sequence is all terminals, consider it a word
+        if all(symbol not in grammar for symbol in current):
+            word = "".join(current)
+            if len(word) <= max_length:
+                words.add(word)
+            continue
+
+        # Prune sequences that already exceed max_length
+        if sum(1 for s in current if s not in grammar) > max_length:
+            continue
+
+        # Expand the first nonterminal in the sequence
+        for i, symbol in enumerate(current):
+            if symbol in grammar:
+                for prod in grammar[symbol]:
+                    new_seq = current[:i] + prod + current[i+1:]
+                    queue.append(new_seq)
+                break
+
+    return sorted(words)
+
 def remove_null_productions(grammar, start):
     # Find nullable nonterminals
     nullable = set()
