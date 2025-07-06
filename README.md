@@ -42,7 +42,7 @@ Selecting the "Show Steps tab will list all the conversion steps as show below:
 ```cfg
 S0 → S
 S  → A S A | a B
-A  → B I S
+A  → B | S
 B  → b | ε
 ```
 
@@ -52,7 +52,7 @@ B  → b | ε
 ```cfg
 S0 → S
 S  → A S A | a B
-A  → B I S
+A  → B | S
 B  → b
 ```
 
@@ -62,7 +62,7 @@ B  → b
 ```cfg
 S0 → A S A | a B
 S  → A S A | a B
-A  → B I S
+A  → B | S
 B  → b
 ```
 
@@ -72,7 +72,7 @@ B  → b
 ```cfg
 S0 → A S A | a B
 S  → A S A | a B
-A  → B I S
+A  → B | S
 B  → b
 ```
 
@@ -83,7 +83,7 @@ B  → b
 AS → AS A | A S
 S0 → A AS | T1 B
 S  → A AS | T1 B
-X1 → X1 S | B I
+X1 → X1 S | B |
 A  → B X1
 B  → b
 T1 → a
