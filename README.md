@@ -42,7 +42,7 @@ Selecting the "Show Steps tab will list all the conversion steps as show below:
 ```cfg
 S0 → S
 S  → A S A | a B
-A  → B I S
+A  → B | S
 B  → b | ε
 ```
 
@@ -51,8 +51,8 @@ B  → b | ε
 ## 2  Remove ε-Productions
 ```cfg
 S0 → S
-S  → A S A | a B
-A  → B I S
+S  → A S A | S A | A S | S | a B | a
+A  → B | S
 B  → b
 ```
 
@@ -60,9 +60,9 @@ B  → b
 
 ## 3  Remove Unit Productions
 ```cfg
-S0 → A S A | a B
-S  → A S A | a B
-A  → B I S
+S0 → A S A | S A | A S | a B | a
+S  → A S A | S A | A S | a B | a
+A  → b | A S A | S A | A S | a B | a
 B  → b
 ```
 
@@ -70,9 +70,9 @@ B  → b
 
 ## 4  Remove Useless Symbols
 ```cfg
-S0 → A S A | a B
-S  → A S A | a B
-A  → B I S
+S0 → A S A | S A | A S | a B | a
+S  → A S A | S A | A S | a B | a
+A  → b | A S A | S A | A S | a B | a
 B  → b
 ```
 
@@ -80,13 +80,12 @@ B  → b
 
 ## 5  Final Chomsky Normal Form
 ```cfg
-SA → S A
-S0 → A SA | T1 B | a
-S  → A SA | T1 B | a
-X1 → I S
-A  → I S | B X1
+A1 → S A
+S0 → A A1 | S A | A S | U B | a
+S  → A A1 | S A | A S | U B | a
+A  → b | A A1 | S A | A S | U B | a
 B  → b
-T1 → a
+U  → a
 ```
 
 

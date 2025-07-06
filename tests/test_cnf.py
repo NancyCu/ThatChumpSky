@@ -33,7 +33,9 @@ class TestCNFConverter(unittest.TestCase):
         ]
         self.assertEqual([t for t, _ in steps], expected_titles)
 
-        expected_cnf = parse_cfg("S -> a | b | A B\nA -> a | T1 A\nB -> b\nT1 -> a")
+        expected_cnf = parse_cfg(
+            "S -> A B | a | b\nA -> U A | a\nB -> b\nU -> a"
+        )
 
         def as_sets(g):
             return {nt: {tuple(p) for p in prods} for nt, prods in g.items()}

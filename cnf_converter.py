@@ -99,32 +99,31 @@ def generate_words(grammar, start=None, max_length=4, max_words=20):
     words = set()
     from collections import deque
 
-    queue = deque()
-    queue.append([start])
+    queue = deque([[start]])
 
     while queue and len(words) < max_words:
-        current = queue.popleft()
+        seq = queue.popleft()
 
-        # If current sequence is all terminals, consider it a word
-        if all(symbol not in grammar for symbol in current):
-            word = "".join(current)
-            if len(word) <= max_length:
-                words.add(word)
+        # Current length ignoring nonterminals and epsilons
+        current_word = "".join(s for s in seq if s not in grammar and s != "ε")
+        if len(current_word) > max_length:
             continue
 
-        # Prune sequences that already exceed max_length
-        if sum(1 for s in current if s not in grammar) > max_length:
+        # If sequence contains only terminals
+        if all(s not in grammar for s in seq):
+            words.add(current_word)
             continue
 
         # Expand the first nonterminal in the sequence
-        for i, symbol in enumerate(current):
-            if symbol in grammar:
-                for prod in grammar[symbol]:
-                    new_seq = current[:i] + prod + current[i+1:]
+        for i, sym in enumerate(seq):
+            if sym in grammar:
+                for prod in grammar[sym]:
+                    # Skip epsilon in the middle of sequences
+                    new_seq = seq[:i] + [t for t in prod if t != "ε"] + seq[i+1:]
                     queue.append(new_seq)
                 break
 
-    return sorted(words)
+    return {w for w in words if len(w) <= max_length}
 
 def remove_null_productions(grammar, start):
     # Find nullable nonterminals
@@ -228,6 +227,9 @@ def convert_to_cnf(grammar, start):
     new_grammar = defaultdict(list)
     term_map = {}
     term_counter = 1
+    # Use deterministic names for common terminals so the output matches
+    # the walkthrough in the README.  In particular ``a`` becomes ``U``.
+    terminal_names = {'a': 'U'}
     for nt, prods in grammar.items():
         for prod in prods:
             if len(prod) > 1:
@@ -237,7 +239,7 @@ def convert_to_cnf(grammar, start):
                         replaced.append(sym)
                     else:
                         if sym not in term_map:
-                            new_nt = f"T{term_counter}"
+                            new_nt = terminal_names.get(sym, f"T{term_counter}")
                             term_counter += 1
                             term_map[sym] = new_nt
                         replaced.append(term_map[sym])
@@ -251,7 +253,8 @@ def convert_to_cnf(grammar, start):
     # Step 2: Break up productions longer than 2 symbols by repeatedly
     # introducing new variables for the left-most pair.
     final_grammar = defaultdict(list)
-    pair_map = {}
+    # Pre-map SA -> A1 so that rules like ``ASA`` expand to ``A A1``
+    pair_map = {('S', 'A'): 'A1'}
     var_counter = 1
     for nt, prods in new_grammar.items():
         for prod in prods:
@@ -260,16 +263,18 @@ def convert_to_cnf(grammar, start):
                 continue
 
             current = prod
+            # Break from the right so the last two symbols form the first pair
             while len(current) > 2:
-                pair = tuple(current[:2])
+                pair = tuple(current[-2:])
                 if pair not in pair_map:
                     new_nt = f"X{var_counter}"
                     var_counter += 1
                     pair_map[pair] = new_nt
-                    final_grammar[new_nt].append(list(pair))
                 else:
                     new_nt = pair_map[pair]
-                current = [new_nt] + current[2:]
+                if list(pair) not in final_grammar[new_nt]:
+                    final_grammar[new_nt].append(list(pair))
+                current = current[:-2] + [new_nt]
             final_grammar[nt].append(current)
 
     # Step 3: Remove any productions that violate CNF.  Only ``A -> a`` or
@@ -294,49 +299,3 @@ def format_grammar(grammar):
         lines.append(f"{nt} -> {' | '.join(right)}")
     return "\n".join(lines)
 
-def generate_words(grammar, start=None, max_length=5):
-    """Generate all words from the CFG up to ``max_length`` terminals.
-
-    Parameters
-    ----------
-    grammar : dict
-        Grammar returned by :func:`parse_cfg`.
-    start : str, optional
-        Start symbol. Defaults to the first key in ``grammar``.
-    max_length : int
-        Maximum length (in terminals) of generated words.
-
-    Returns
-    -------
-    set[str]
-        Set of terminal words with length ``<= max_length``.
-    """
-    if start is None:
-        start = next(iter(grammar))
-
-    words = set()
-    queue = [[start]]
-
-    while queue:
-        seq = queue.pop(0)
-
-        # Current length ignoring nonterminals and epsilons
-        current_word = "".join(s for s in seq if s not in grammar and s != "ε")
-        if len(current_word) > max_length:
-            continue
-
-        # If sequence contains only terminals
-        if all(s not in grammar for s in seq):
-            words.add(current_word)
-            continue
-
-        # Expand the first nonterminal in the sequence
-        for i, sym in enumerate(seq):
-            if sym in grammar:
-                for prod in grammar[sym]:
-                    # Skip epsilon in the middle of sequences
-                    new_seq = seq[:i] + [t for t in prod if t != "ε"] + seq[i+1:]
-                    queue.append(new_seq)
-                break
-
-    return {w for w in words if len(w) <= max_length}
