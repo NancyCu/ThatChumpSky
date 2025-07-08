@@ -58,6 +58,10 @@ def cfg_to_cnf(grammar):
 
     # Step 1: Remove null (epsilon) productions
     grammar = remove_null_productions(grammar, start)
+    # Defensive sweep to ensure no stray ε remain
+    for A in list(grammar):
+        if A != start and ['ε'] in grammar[A]:
+            grammar[A] = [p for p in grammar[A] if p != ['ε']]
     add_step("After removing ε-productions", grammar)
 
     # Step 2: Remove unit productions
@@ -158,11 +162,11 @@ def remove_null_productions(grammar, start):
                         if (mask >> positions.index(i)) & 1:
                             continue
                     new_prod.append(symbol)
+                # keep ε only for the start symbol
                 if not new_prod:
-                    if nt == start:
-                        new_prod = ['ε']
-                    else:
-                        continue
+                    if nt == start and ['ε'] not in new_grammar[nt]:
+                        new_grammar[nt].append(['ε'])
+                    continue
                 if new_prod not in new_grammar[nt]:
                     new_grammar[nt].append(new_prod)
     return dict(new_grammar)

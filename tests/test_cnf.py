@@ -62,5 +62,28 @@ class TestCNFConverter(unittest.TestCase):
         words = generate_words(grammar, 'S', max_length=1)
         self.assertEqual(words, {'', 'a'})
 
+    def test_epsilon_removal_correctness(self):
+        cfg_str = "A -> B A B | B | ε\nB -> 0 0 | ε"
+        grammar = parse_cfg(cfg_str)
+        cnf_str, steps = cfg_to_cnf(grammar)
+
+        epsilon_removed = None
+        for title, g in steps:
+            if title == 'After removing ε-productions':
+                epsilon_removed = parse_cfg(g)
+                break
+
+        # no ε-productions should remain except possibly for the new start symbol
+        for nt, prods in epsilon_removed.items():
+            if nt == 'S0':
+                continue
+            self.assertNotIn(['ε'], prods)
+
+        cnf = parse_cfg(cnf_str)
+        for nt, prods in cnf.items():
+            for p in prods:
+                if p == ['ε']:
+                    self.assertEqual(nt, 'S0')
+
 if __name__ == '__main__':
     unittest.main()
