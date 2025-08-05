@@ -1,5 +1,53 @@
 import streamlit as st
 
+# 3D style for all buttons
+st.markdown(
+    """
+    <style>
+    .stButton > button {
+        background-color: #4CAF50;
+        color: white;
+        padding: 0.5em 1em;
+        border: none;
+        border-radius: 5px;
+        box-shadow: 0 4px #2c662d;
+    }
+    .stButton > button:active {
+        box-shadow: 0 2px #2c662d;
+        transform: translateY(2px);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Dark mode state
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
+
+# Top control buttons aligned to the right
+_, col_dark, col_print = st.columns([8, 1, 1])
+with col_dark:
+    if st.button("Dark Mode", key="dark_mode_toggle"):
+        st.session_state.dark_mode = not st.session_state.dark_mode
+with col_print:
+    if st.button("Print", key="print_button"):
+        st.markdown("<script>window.print()</script>", unsafe_allow_html=True)
+
+# Apply dark mode styling
+if st.session_state.dark_mode:
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background-color: #222;
+            color: white;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 st.title("CFG to Chomsky Normal Form Converter")
 
 st.markdown("""
